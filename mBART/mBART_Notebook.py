@@ -202,10 +202,10 @@ def preprocess_function(examples):
     inputs = [t["en"] for t in examples["translation"]]
     targets = [t["sn"] for t in examples["translation"]]  # Sanskrit texts
 
-    model_inputs = TOKENIZER(inputs, max_length=256, truncation=True, padding=False)
+    model_inputs = TOKENIZER(inputs, max_length=128, truncation=True, padding="longest")
 
-    # tokenize targets, can also sat padding as 'longest' to save memory and pad only to the longest target in the batch
-    labels = TOKENIZER(targets, max_length=512, truncation=True, padding=False)
+    # tokenize targets, set padding as longest which saves memory and pads only to the longest target in the batch
+    labels = TOKENIZER(targets, max_length=128, truncation=True, padding="longest")
 
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
@@ -254,8 +254,9 @@ training_args = Seq2SeqTrainingArguments(
     output_dir="./results",
     eval_strategy="steps",
     eval_steps=500,
-    per_device_train_batch_size=4,
-    per_device_eval_batch_size=4,
+    per_device_train_batch_size=2,
+    per_device_eval_batch_size=2,
+    gradient_accumulation_steps=2,
     learning_rate=5e-5,
     num_train_epochs=3,
     weight_decay=0.01,
