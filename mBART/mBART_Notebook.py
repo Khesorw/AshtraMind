@@ -139,18 +139,21 @@ peft_config = LoraConfig(
     target_modules=["q_proj", "v_proj", "k_proj"],
 )
 
-MODEL = MBartForConditionalGeneration.from_pretrained(
+model = MBartForConditionalGeneration.from_pretrained(
     "facebook/mbart-large-50-many-to-many-mmt",
     quantization_config=QUANT_CONFIG,
-    torch_dtype=torch.float16,  # Use float16 for better performance on GPUs  
 )
-MODEL = get_peft_model(MODEL, peft_config)
+
+MODEL = get_peft_model(model, peft_config)
 print("Quantize and LoRA Model loaded successfully ✅")
 trainable_params = sum(p.numel() for p in MODEL.parameters() if p.requires_grad) 
 total_params = sum(p.numel() for p in MODEL.parameters())
 print(f"Total parameters: {total_params:,}")
 print(f"✅ Trainable parameters: {trainable_params:,}")
 print(f"💡 Trainable ratio: {100 * trainable_params / total_params:.4f}%")
+for name, param in MODEL.named_parameters():
+    if param.requires_grad:
+        print(name, param.shape)
 
 TOKENIZER = MBart50Tokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
 TOKENIZER.src_lang = "en_XX"
@@ -227,10 +230,10 @@ def preprocess_function(examples):
     inputs = [t["en"] for t in examples["translation"]]
     targets = [t["sn"] for t in examples["translation"]]  # Sanskrit texts
 
-    model_inputs = TOKENIZER(inputs, max_length=8, truncation=True, padding="longest")
+    model_inputs = TOKENIZER(inputs, max_length=128, truncation=True, padding="longest")
 
     # tokenize targets, set padding as longest which saves memory and pads only to the longest target in the batch
-    labels = TOKENIZER(targets, max_length=8, truncation=True, padding="longest")
+    labels = TOKENIZER(targets, max_length=128, truncation=True, padding="longest")
 
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
@@ -258,19 +261,23 @@ print("Data collator created successfully ✅")
 bleu = evaluate.load("bleu")
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
-    # decode predictions and labels
+
+    # Decode predictions
     decoded_preds = TOKENIZER.batch_decode(predictions, skip_special_tokens=True)
-    
-    # Replace -100 in the labels as we can't decode them
+
+    # Replace -100 in the labels with pad_token_id, then decode
     labels = np.where(labels != -100, labels, TOKENIZER.pad_token_id)
     decoded_labels = TOKENIZER.batch_decode(labels, skip_special_tokens=True)
-    
-    # BLEU expects list of references for each prediction (hence [[ref1], [ref2], ...])
-    decoded_labels = [[label.split()] for label in decoded_labels]
-    decoded_preds = [pred.split() for pred in decoded_preds]
-    
+
+    # Clean up spacing
+    decoded_preds = [pred.strip() for pred in decoded_preds]
+    decoded_labels = [[label.strip()] for label in decoded_labels]  # wrap each label in a list
+
+    # Compute BLEU
     result = bleu.compute(predictions=decoded_preds, references=decoded_labels)
+
     return {"bleu": result["bleu"]}
+
 
 print("Metrics function created successfully ✅")
 
@@ -291,7 +298,9 @@ training_args = Seq2SeqTrainingArguments(
     logging_dir="./logs",
     logging_steps=100,
     optim="adamw_torch_fused",
-    predict_with_generate=True,  # important for seq2seq tasks
+    predict_with_generate=True, # Important for seq2seq tasks
+    generation_max_length=128,  # Max length for generated sequences during eval
+    generation_num_beams=4,     # Use beam search for better quality
 )
 print("Training arguments set successfully ✅")
 
