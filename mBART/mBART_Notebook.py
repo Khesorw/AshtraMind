@@ -110,16 +110,16 @@ valid_dataset[0] # Inspect the first example in the validation dataset
 
 # %%
 # Indexing the datasets
-print(train_dataset[0])  # To see the full content of the first example
-print("--" * 50)
-print(train_dataset[0]["translation"])  # To see the root of the nested dictionary
-print("--" * 50)
-print(train_dataset[0]["translation"]["en"])  # To see the English translation of the first example
-print("--" * 50)
-print(train_dataset[0]["translation"]["sn"])  # To see the Sanskrit translation of the first example
-print("--" * 50)
-for i in range(3):
-    print(f"Example {i}: (English: {train_dataset[i]['translation']['en']}) (Sanskrit: {train_dataset[i]['translation']['sn']})")
+# print(train_dataset[0])  # To see the full content of the first example
+# print("--" * 50)
+# print(train_dataset[0]["translation"])  # To see the root of the nested dictionary
+# print("--" * 50)
+# print(train_dataset[0]["translation"]["en"])  # To see the English translation of the first example
+# print("--" * 50)
+# print(train_dataset[0]["translation"]["sn"])  # To see the Sanskrit translation of the first example
+# print("--" * 50)
+# for i in range(3):
+#     print(f"Example {i}: (English: {train_dataset[i]['translation']['en']}) (Sanskrit: {train_dataset[i]['translation']['sn']})")
 
 # %% [markdown]
 # # 3_Modelling
@@ -147,31 +147,36 @@ def translate_text(text, model=MODEL, tokenizer=TOKENIZER, src_lang=TOKENIZER.sr
 
     return tokenizer.decode(output_ids[0], skip_special_tokens=skip_special_tokens)
 
-translate_text(text=TEXT_TO_TRANSLATE)
+try:
+    translated_text = translate_text(TEXT_TO_TRANSLATE)
+    print(f"Model and Tokenizer intialized successfully ✅")
+    print(f"Translated text: {translated_text}")
+except Exception as e:
+    print(f"Error occurred during translation: {e}")
 
 # %%
 # Human-readable language names mapped to mBART-50 language codes
-lang_code_to_name = {
-    "ar_AR": "Arabic", "cs_CZ": "Czech", "de_DE": "German", "en_XX": "English", "es_XX": "Spanish",
-    "et_EE": "Estonian", "fi_FI": "Finnish", "fr_XX": "French", "gu_IN": "Gujarati", "hi_IN": "Hindi",
-    "it_IT": "Italian", "ja_XX": "Japanese", "kk_KZ": "Kazakh", "ko_KR": "Korean", "lt_LT": "Lithuanian",
-    "lv_LV": "Latvian", "my_MM": "Burmese", "ne_NP": "Nepali", "nl_XX": "Dutch", "ro_RO": "Romanian",
-    "ru_RU": "Russian", "si_LK": "Sinhala", "tr_TR": "Turkish", "vi_VN": "Vietnamese", "zh_CN": "Chinese (Simplified)",
-    "af_ZA": "Afrikaans", "az_AZ": "Azerbaijani", "bn_IN": "Bengali", "fa_IR": "Persian", "he_IL": "Hebrew",
-    "hr_HR": "Croatian", "id_ID": "Indonesian", "ka_GE": "Georgian", "km_KH": "Khmer", "mk_MK": "Macedonian",
-    "ml_IN": "Malayalam", "mn_MN": "Mongolian", "mr_IN": "Marathi", "pl_PL": "Polish", "ps_AF": "Pashto",
-    "pt_XX": "Portuguese", "sr_XX": "Serbian", "ta_IN": "Tamil", "te_IN": "Telugu", "th_TH": "Thai",
-    "tl_XX": "Tagalog", "uk_UA": "Ukrainian", "ur_PK": "Urdu", "xh_ZA": "Xhosa", "gl_ES": "Galician",
-    "sl_SI": "Slovenian"
-}
+# lang_code_to_name = {
+#     "ar_AR": "Arabic", "cs_CZ": "Czech", "de_DE": "German", "en_XX": "English", "es_XX": "Spanish",
+#     "et_EE": "Estonian", "fi_FI": "Finnish", "fr_XX": "French", "gu_IN": "Gujarati", "hi_IN": "Hindi",
+#     "it_IT": "Italian", "ja_XX": "Japanese", "kk_KZ": "Kazakh", "ko_KR": "Korean", "lt_LT": "Lithuanian",
+#     "lv_LV": "Latvian", "my_MM": "Burmese", "ne_NP": "Nepali", "nl_XX": "Dutch", "ro_RO": "Romanian",
+#     "ru_RU": "Russian", "si_LK": "Sinhala", "tr_TR": "Turkish", "vi_VN": "Vietnamese", "zh_CN": "Chinese (Simplified)",
+#     "af_ZA": "Afrikaans", "az_AZ": "Azerbaijani", "bn_IN": "Bengali", "fa_IR": "Persian", "he_IL": "Hebrew",
+#     "hr_HR": "Croatian", "id_ID": "Indonesian", "ka_GE": "Georgian", "km_KH": "Khmer", "mk_MK": "Macedonian",
+#     "ml_IN": "Malayalam", "mn_MN": "Mongolian", "mr_IN": "Marathi", "pl_PL": "Polish", "ps_AF": "Pashto",
+#     "pt_XX": "Portuguese", "sr_XX": "Serbian", "ta_IN": "Tamil", "te_IN": "Telugu", "th_TH": "Thai",
+#     "tl_XX": "Tagalog", "uk_UA": "Ukrainian", "ur_PK": "Urdu", "xh_ZA": "Xhosa", "gl_ES": "Galician",
+#     "sl_SI": "Slovenian"
+# }
 
-# Print total number of languages
-print("Total languages supported by the tokenizer:", len(TOKENIZER.lang_code_to_id))
+# # Print total number of languages
+# print("Total languages supported by the tokenizer:", len(TOKENIZER.lang_code_to_id))
 
-# Print human-readable name for each language code
-for lang_code, token_id in TOKENIZER.lang_code_to_id.items():
-    name = lang_code_to_name.get(lang_code, "Unknown")
-    print(f"Language Code: {lang_code}, Human Name: {name}, Token ID: {token_id}")
+# # Print human-readable name for each language code
+# for lang_code, token_id in TOKENIZER.lang_code_to_id.items():
+#     name = lang_code_to_name.get(lang_code, "Unknown")
+#     print(f"Language Code: {lang_code}, Human Name: {name}, Token ID: {token_id}")
 
 
 # %% [markdown]
@@ -196,11 +201,11 @@ print("Top 10 longest:", sorted(token_lens)[-10:])
 def preprocess_function(examples):
     inputs = [t["en"] for t in examples["translation"]]
     targets = [t["sn"] for t in examples["translation"]]  # Sanskrit texts
-    
-    model_inputs = TOKENIZER(inputs, max_length=512, truncation=True, padding=False)
+
+    model_inputs = TOKENIZER(inputs, max_length=256, truncation=True, padding=False)
 
     # tokenize targets, can also sat padding as 'longest' to save memory and pad only to the longest target in the batch
-    labels = TOKENIZER(targets, max_length=1024, truncation=True, padding=False)
+    labels = TOKENIZER(targets, max_length=512, truncation=True, padding=False)
 
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
@@ -245,8 +250,8 @@ training_args = Seq2SeqTrainingArguments(
     output_dir="./results",
     eval_strategy="steps",
     eval_steps=500,
-    per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
+    per_device_train_batch_size=4,
+    per_device_eval_batch_size=4,
     learning_rate=5e-5,
     num_train_epochs=3,
     weight_decay=0.01,
