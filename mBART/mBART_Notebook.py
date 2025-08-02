@@ -26,6 +26,8 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, MBart50Tokenizer,
 import evaluate
 import numpy as np
 import gc
+from accelerate import Accelerator
+
 print("All imports are successful ✅")
 
 print("--" * 50)
@@ -203,10 +205,10 @@ def preprocess_function(examples):
     inputs = [t["en"] for t in examples["translation"]]
     targets = [t["sn"] for t in examples["translation"]]  # Sanskrit texts
 
-    model_inputs = TOKENIZER(inputs, max_length=64, truncation=True, padding="longest")
+    model_inputs = TOKENIZER(inputs, max_length=16, truncation=True, padding="longest")
 
     # tokenize targets, set padding as longest which saves memory and pads only to the longest target in the batch
-    labels = TOKENIZER(targets, max_length=64, truncation=True, padding="longest")
+    labels = TOKENIZER(targets, max_length=16, truncation=True, padding="longest")
 
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
@@ -258,7 +260,7 @@ training_args = Seq2SeqTrainingArguments(
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
     gradient_accumulation_steps=4,  # Adjusted for smaller batch size
-    learning_rate=5e-5,
+    learning_rate=3e-5,
     num_train_epochs=3,
     weight_decay=0.01,
     save_total_limit=2,
@@ -285,6 +287,11 @@ trainer = Seq2SeqTrainer(
 gc.collect()
 torch.cuda.empty_cache()
 print("CUDA cache cleared ✅")
+
+# %%
+accelerator = Accelerator()
+print(f"Mixed precision: {accelerator.mixed_precision}")
+
 
 # %%
 # Train the model
