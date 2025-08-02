@@ -218,6 +218,8 @@ tokenized_valid = valid_dataset.map(preprocess_function, batched=True)
 # Tokenize the test dataset
 tokenized_test = test_dataset.map(preprocess_function, batched=True)
 
+print("Tokenization complete for train, validation, and test datasets ✅")
+
 
 # %% [markdown]
 # # 5_Training
@@ -225,6 +227,7 @@ tokenized_test = test_dataset.map(preprocess_function, batched=True)
 # %%
 # Data collator for Seq2Seq models used for padding and creating attention masks
 data_collator = DataCollatorForSeq2Seq(tokenizer=TOKENIZER, model=MODEL)
+print("Data collator created successfully ✅")
 
 # %%
 bleu = evaluate.load("bleu")
@@ -244,6 +247,7 @@ def compute_metrics(eval_pred):
     result = bleu.compute(predictions=decoded_preds, references=decoded_labels)
     return {"bleu": result["bleu"]}
 
+print("Metrics function created successfully ✅")
 
 # %%
 training_args = Seq2SeqTrainingArguments(
@@ -261,6 +265,7 @@ training_args = Seq2SeqTrainingArguments(
     logging_steps=100,
     predict_with_generate=True,  # important for seq2seq tasks
 )
+print("Training arguments set successfully ✅")
 
 # %%
 trainer = Seq2SeqTrainer(
