@@ -163,14 +163,20 @@ TEXT_TO_TRANSLATE = "For one who has conquered the mind, the mind is the best of
 
 # %%
 def translate_text(text, model=MODEL, tokenizer=TOKENIZER, src_lang=TOKENIZER.src_lang, tgt_lang=TOKENIZER.tgt_lang, skip_special_tokens=True):
-
-    inputs = tokenizer(text, return_tensors="pt")
+    # Get model device
+    device = next(model.parameters()).device
+    
+    inputs = tokenizer(text, return_tensors="pt").to(device)
 
     # Force decoder to use target language
-    output_ids = model.generate(
-        **inputs,
-        forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang]
-    )
+    with torch.no_grad():  # Add no_grad for inference
+        output_ids = model.generate(
+            **inputs,
+            forced_bos_token_id=tokenizer.lang_code_to_id[tgt_lang],
+            max_length=128,  # Add explicit max_length
+            num_beams=4,     # Match training beam size
+            early_stopping=True
+        )
 
     return tokenizer.decode(output_ids[0], skip_special_tokens=skip_special_tokens)
 
@@ -259,6 +265,8 @@ print("Data collator created successfully ✅")
 
 # %%
 bleu = evaluate.load("bleu")
+rouge = evaluate.load("rouge")
+
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
 
@@ -274,9 +282,20 @@ def compute_metrics(eval_pred):
     decoded_labels = [[label.strip()] for label in decoded_labels]  # wrap each label in a list
 
     # Compute BLEU
-    result = bleu.compute(predictions=decoded_preds, references=decoded_labels)
+    bleu_result = bleu.compute(predictions=decoded_preds, references=decoded_labels)
+    
+    # Compute ROUGE for additional metrics
+    rouge_result = rouge.compute(
+        predictions=decoded_preds, 
+        references=[ref[0] for ref in decoded_labels]
+    )
 
-    return {"bleu": result["bleu"]}
+    return {
+        "bleu": bleu_result["bleu"],
+        "rouge1": rouge_result["rouge1"],
+        "rouge2": rouge_result["rouge2"],
+        "rougeL": rouge_result["rougeL"]
+    }
 
 
 print("Metrics function created successfully ✅")
@@ -289,18 +308,22 @@ training_args = Seq2SeqTrainingArguments(
     per_device_train_batch_size=8,
     per_device_eval_batch_size=16,
     gradient_accumulation_steps=2,
-    learning_rate=5e-5,
-    num_train_epochs=1,
+    learning_rate=3e-5,
+    num_train_epochs=3,
     fp16=True,
     weight_decay=0.01,
-    save_total_limit=2,
-    save_steps=500,
+    save_total_limit=3,
+    save_steps=200,
     logging_dir="./logs",
     logging_steps=100,
     optim="adamw_torch_fused",
     predict_with_generate=True, # Important for seq2seq tasks
     generation_max_length=128,  # Max length for generated sequences during eval
     generation_num_beams=4,     # Use beam search for better quality
+    warmup_steps=100,           # Add warmup for stable training
+    load_best_model_at_end=True, # Load best model at end
+    metric_for_best_model="bleu", # Use BLEU to determine best model
+    greater_is_better=True,      # Higher BLEU is better
 )
 print("Training arguments set successfully ✅")
 
@@ -335,3 +358,40 @@ trainer.train()
 
 # %%
 # Evaluate the model on the test dataset
+print("Starting model evaluation...")
+
+# Evaluate on test set
+test_results = trainer.evaluate(eval_dataset=tokenized_test)
+print("Test Results:", test_results)
+
+# %%
+# Sample translations for qualitative analysis
+def evaluate_sample_translations():
+    sample_texts = [
+        "The mind is everything. What you think you become.",
+        "Happiness comes from within.",
+        "Knowledge is power.",
+        "Truth alone triumphs.",
+        "The whole world is one family."
+    ]
+    
+    print("Sample Translations:")
+    print("=" * 80)
+    
+    for i, text in enumerate(sample_texts, 1):
+        try:
+            translation = translate_text(text)
+            print(f"{i}. English: {text}")
+            print(f"   Sanskrit: {translation}")
+            print("-" * 60)
+        except Exception as e:
+            print(f"Error translating '{text}': {e}")
+            print("-" * 60)
+
+evaluate_sample_translations()
+
+# %%
+# Save the fine-tuned model
+MODEL.save_pretrained("./fine_tuned_mbart_sanskrit")
+TOKENIZER.save_pretrained("./fine_tuned_mbart_sanskrit")
+print("Model and tokenizer saved successfully ✅")
