@@ -208,3 +208,5 @@ __marimo__/
 
 
 practice.py
+# Model checkpoint files etc
+results/
