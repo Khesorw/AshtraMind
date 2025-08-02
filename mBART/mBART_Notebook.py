@@ -22,7 +22,7 @@ import sys
 import pip
 import torch
 from datasets import get_dataset_split_names, load_dataset, load_dataset_builder, get_dataset_config_names,  load_metric
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, MBart50Tokenizer, MBartForConditionalGeneration, Seq2SeqTrainer, Seq2SeqTrainingArguments, DataCollatorForSeq2Seq
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, MBart50Tokenizer, MBartForConditionalGeneration, Seq2SeqTrainer, Seq2SeqTrainingArguments, DataCollatorForSeq2Seq, BitsAndBytesConfig
 import evaluate
 import numpy as np
 import gc
@@ -128,12 +128,26 @@ valid_dataset[0] # Inspect the first example in the validation dataset
 # # 3_Modelling
 
 # %%
-MODEL = MBartForConditionalGeneration.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
+# bnb_config = BitsAndBytesConfig(
+#     load_in_8bit=True,
+#     llm_int8_threshold=6.0,
+#     llm_int8_has_fp16_weight=True
+# )
+
+# MODEL = MBartForConditionalGeneration.from_pretrained(
+#     "facebook/mbart-large-50-many-to-many-mmt",
+#     quantization_config=bnb_config, 
+#     device_map="auto"
+# )
 TOKENIZER = MBart50Tokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
 TOKENIZER.src_lang = "en_XX"
 TOKENIZER.tgt_lang = "hi_IN"  # Setting Hindi token id as a proxy for Sanskrit
 
-
+MODEL = MBartForConditionalGeneration.from_pretrained(
+    "facebook/mbart-large-50-many-to-many-mmt",
+    torch_dtype=torch.float16,  # Use float16 for better performance on GPUs
+    device_map="auto",
+)
 TEXT_TO_TRANSLATE = "For one who has conquered the mind, the mind is the best of friends; but for one who has failed to do so, his very mind will be the greatest enemy."
 
 
@@ -267,6 +281,7 @@ training_args = Seq2SeqTrainingArguments(
     save_steps=500,
     logging_dir="./logs",
     logging_steps=100,
+    # optim="paged_adamw_8bit",  # Using 8-bit AdamW optimizer for memory efficiency
     predict_with_generate=True,  # important for seq2seq tasks
 )
 print("Training arguments set successfully ✅")
