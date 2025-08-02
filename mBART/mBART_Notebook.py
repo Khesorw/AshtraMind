@@ -27,6 +27,7 @@ import evaluate
 import numpy as np
 import gc
 from accelerate import Accelerator
+from peft import get_peft_model, LoraConfig, TaskType
 
 print("All imports are successful ✅")
 
@@ -90,7 +91,6 @@ ds_builder.info.description
 ds_builder.info.features
 
 # %%
-from datasets import load_dataset
 
 train_dataset = load_dataset("rahular/itihasa", split="train")
 valid_dataset = load_dataset("rahular/itihasa", split="validation")
@@ -128,28 +128,19 @@ valid_dataset[0] # Inspect the first example in the validation dataset
 # # 3_Modelling
 
 # %%
-# bnb_config = BitsAndBytesConfig(
-#     load_in_8bit=True,
-#     llm_int8_threshold=6.0,
-#     llm_int8_has_fp16_weight=True
-# )
+QUANT_CONFIG = BitsAndBytesConfig(load_in_8bit=True)
 
-# MODEL = MBartForConditionalGeneration.from_pretrained(
-#     "facebook/mbart-large-50-many-to-many-mmt",
-#     quantization_config=bnb_config, 
-#     device_map="auto"
-# )
+MODEL = MBartForConditionalGeneration.from_pretrained(
+    "facebook/mbart-large-50-many-to-many-mmt",
+    quantization_config=QUANT_CONFIG,
+    device_map="auto",
+    torch_dtype=torch.float16,  # Use float16 for better performance on GPUs  
+)
 TOKENIZER = MBart50Tokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
 TOKENIZER.src_lang = "en_XX"
 TOKENIZER.tgt_lang = "hi_IN"  # Setting Hindi token id as a proxy for Sanskrit
 
-MODEL = MBartForConditionalGeneration.from_pretrained(
-    "facebook/mbart-large-50-many-to-many-mmt",
-    torch_dtype=torch.float16,  # Use float16 for better performance on GPUs
-    device_map="auto",
-)
 TEXT_TO_TRANSLATE = "For one who has conquered the mind, the mind is the best of friends; but for one who has failed to do so, his very mind will be the greatest enemy."
-
 
 # %%
 def translate_text(text, model=MODEL, tokenizer=TOKENIZER, src_lang=TOKENIZER.src_lang, tgt_lang=TOKENIZER.tgt_lang, skip_special_tokens=True):
@@ -167,6 +158,7 @@ def translate_text(text, model=MODEL, tokenizer=TOKENIZER, src_lang=TOKENIZER.sr
 try:
     translated_text = translate_text(TEXT_TO_TRANSLATE)
     print(f"Model and Tokenizer intialized successfully ✅")
+    print(f"Original text: {TEXT_TO_TRANSLATE}")
     print(f"Translated text: {translated_text}")
 except Exception as e:
     print(f"Error occurred during translation: {e}")
@@ -281,7 +273,7 @@ training_args = Seq2SeqTrainingArguments(
     save_steps=500,
     logging_dir="./logs",
     logging_steps=100,
-    # optim="paged_adamw_8bit",  # Using 8-bit AdamW optimizer for memory efficiency
+    optim="paged_adamw_8bit",
     predict_with_generate=True,  # important for seq2seq tasks
 )
 print("Training arguments set successfully ✅")
@@ -294,7 +286,6 @@ trainer = Seq2SeqTrainer(
     eval_dataset=tokenized_valid,
     processing_class=TOKENIZER,
     data_collator=data_collator,
-    
     compute_metrics=compute_metrics,
 )
 
