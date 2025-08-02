@@ -274,3 +274,6 @@ trainer.train()
 
 # %% [markdown]
 # # 6_Evaluation
+
+# %%
+# Evaluate the model on the test dataset
