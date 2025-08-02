@@ -21,10 +21,10 @@
 import sys
 import pip
 import torch
-from datasets import get_dataset_split_names, load_dataset, load_dataset_builder, get_dataset_config_names
-from transformers import pipeline
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, MBart50Tokenizer, MBartForConditionalGeneration
-
+from datasets import get_dataset_split_names, load_dataset, load_dataset_builder, get_dataset_config_names,  load_metric
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, MBart50Tokenizer, MBartForConditionalGeneration, Seq2SeqTrainer, Seq2SeqTrainingArguments, DataCollatorForSeq2Seq
+import evaluate
+import numpy as np
 print("All imports are successful ✅")
 
 print("--" * 50)
@@ -60,9 +60,15 @@ if torch.cuda.is_available():
 else:
     print("Pytorch is not using CUDA.")
 
+print("--" * 50)
+# Check if evaluate is working
+# !python -c "import evaluate; print(evaluate.load('exact_match').compute(references=['hello'], predictions=['hello']))"
+print("Evaluate is working ✅")
+
+
 
 # %% [markdown]
-# # 2_Load_Dataset_and_Preprocess
+# # 2_Load_Dataset
 
 # %%
 # https://huggingface.co/docs/datasets/load_hub
@@ -116,17 +122,23 @@ for i in range(3):
     print(f"Example {i}: (English: {train_dataset[i]['translation']['en']}) (Sanskrit: {train_dataset[i]['translation']['sn']})")
 
 # %% [markdown]
-# # 3_Modelling_and_Training
+# # 3_Modelling
 
 # %%
-model = MBartForConditionalGeneration.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
-tokenizer = MBart50Tokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
+MODEL = MBartForConditionalGeneration.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
+TOKENIZER = MBart50Tokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
+TOKENIZER.src_lang = "en_XX"
+TOKENIZER.tgt_lang = "hi_IN"  # Setting Hindi token id as a proxy for Sanskrit
 
-def translate_text(model, tokenizer, text, src_lang="en_XX", tgt_lang="hi_IN", skip_special_tokens=True):
-    tokenizer.src_lang = src_lang
-    tokenizer.tgt_lang = tgt_lang
+
+TEXT_TO_TRANSLATE = "For one who has conquered the mind, the mind is the best of friends; but for one who has failed to do so, his very mind will be the greatest enemy."
+
+
+# %%
+def translate_text(text, model=MODEL, tokenizer=TOKENIZER, src_lang=TOKENIZER.src_lang, tgt_lang=TOKENIZER.tgt_lang, skip_special_tokens=True):
+
     inputs = tokenizer(text, return_tensors="pt")
-    
+
     # Force decoder to use target language
     output_ids = model.generate(
         **inputs,
@@ -135,7 +147,7 @@ def translate_text(model, tokenizer, text, src_lang="en_XX", tgt_lang="hi_IN", s
 
     return tokenizer.decode(output_ids[0], skip_special_tokens=skip_special_tokens)
 
-
+translate_text(text=TEXT_TO_TRANSLATE)
 
 # %%
 # Human-readable language names mapped to mBART-50 language codes
@@ -154,12 +166,111 @@ lang_code_to_name = {
 }
 
 # Print total number of languages
-print("Total languages supported by the tokenizer:", len(tokenizer.lang_code_to_id))
+print("Total languages supported by the tokenizer:", len(TOKENIZER.lang_code_to_id))
 
 # Print human-readable name for each language code
-for lang_code, token_id in tokenizer.lang_code_to_id.items():
+for lang_code, token_id in TOKENIZER.lang_code_to_id.items():
     name = lang_code_to_name.get(lang_code, "Unknown")
     print(f"Language Code: {lang_code}, Human Name: {name}, Token ID: {token_id}")
 
 
+# %% [markdown]
+# # 4_Preprocessing
+
 # %%
+# Calculate the length of input IDs for each Sanskrit translation in the training dataset
+# This will help to select max length for model inputs in the preprocess function
+# Extract list of Sanskrit texts
+# Sanskrit contains lot of samasa (compound words) which can be long therefore appropriate to check token lengths
+sanskrit_texts = [item["translation"]["sn"] for item in train_dataset]
+
+# Now calculate token lengths
+token_lens = [len(TOKENIZER(text)["input_ids"]) for text in sanskrit_texts]
+
+# Check maximum and top 10 longest
+print("Max length:", max(token_lens))
+print("Top 10 longest:", sorted(token_lens)[-10:])
+
+
+# %%
+def preprocess_function(examples):
+    inputs = [t["en"] for t in examples["translation"]]
+    targets = [t["sn"] for t in examples["translation"]]  # Sanskrit texts
+    
+    model_inputs = TOKENIZER(inputs, max_length=512, truncation=True, padding=False)
+
+    # tokenize targets, can also sat padding as 'longest' to save memory and pad only to the longest target in the batch
+    labels = TOKENIZER(targets, max_length=1024, truncation=True, padding=False)
+
+    model_inputs["labels"] = labels["input_ids"]
+    return model_inputs
+
+tokenized_train = train_dataset.map(preprocess_function, batched=True)
+
+# Tokenize the validation dataset
+tokenized_valid = valid_dataset.map(preprocess_function, batched=True)
+
+# Tokenize the test dataset
+tokenized_test = test_dataset.map(preprocess_function, batched=True)
+
+
+# %% [markdown]
+# # 5_Training
+
+# %%
+# Data collator for Seq2Seq models used for padding and creating attention masks
+data_collator = DataCollatorForSeq2Seq(tokenizer=TOKENIZER, model=MODEL)
+
+# %%
+bleu = evaluate.load("bleu")
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    # decode predictions and labels
+    decoded_preds = TOKENIZER.batch_decode(predictions, skip_special_tokens=True)
+    
+    # Replace -100 in the labels as we can't decode them
+    labels = np.where(labels != -100, labels, TOKENIZER.pad_token_id)
+    decoded_labels = TOKENIZER.batch_decode(labels, skip_special_tokens=True)
+    
+    # BLEU expects list of references for each prediction (hence [[ref1], [ref2], ...])
+    decoded_labels = [[label.split()] for label in decoded_labels]
+    decoded_preds = [pred.split() for pred in decoded_preds]
+    
+    result = bleu.compute(predictions=decoded_preds, references=decoded_labels)
+    return {"bleu": result["bleu"]}
+
+
+# %%
+training_args = Seq2SeqTrainingArguments(
+    output_dir="./results",
+    eval_strategy="steps",
+    eval_steps=500,
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=8,
+    learning_rate=5e-5,
+    num_train_epochs=3,
+    weight_decay=0.01,
+    save_total_limit=2,
+    save_steps=500,
+    logging_dir="./logs",
+    logging_steps=100,
+    predict_with_generate=True,  # important for seq2seq tasks
+)
+
+# %%
+trainer = Seq2SeqTrainer(
+    model=MODEL,
+    args=training_args,
+    train_dataset=tokenized_train,
+    eval_dataset=tokenized_valid,
+    processing_class=TOKENIZER,
+    data_collator=data_collator,
+    compute_metrics=compute_metrics,
+)
+
+# %%
+# Train the model
+trainer.train()
+
+# %% [markdown]
+# # 6_Evaluation
