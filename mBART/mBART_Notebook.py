@@ -130,12 +130,28 @@ valid_dataset[0] # Inspect the first example in the validation dataset
 # %%
 QUANT_CONFIG = BitsAndBytesConfig(load_in_8bit=True)
 
+peft_config = LoraConfig(
+    task_type=TaskType.SEQ_2_SEQ_LM,
+    inference_mode=False,
+    r=8,               # rank of LoRA matrices
+    lora_alpha=32,
+    lora_dropout=0.1,
+    target_modules=["q_proj", "v_proj", "k_proj"],
+)
+
 MODEL = MBartForConditionalGeneration.from_pretrained(
     "facebook/mbart-large-50-many-to-many-mmt",
     quantization_config=QUANT_CONFIG,
-    device_map="auto",
     torch_dtype=torch.float16,  # Use float16 for better performance on GPUs  
 )
+MODEL = get_peft_model(MODEL, peft_config)
+print("Quantize and LoRA Model loaded successfully ✅")
+trainable_params = sum(p.numel() for p in MODEL.parameters() if p.requires_grad) 
+total_params = sum(p.numel() for p in MODEL.parameters())
+print(f"Total parameters: {total_params:,}")
+print(f"✅ Trainable parameters: {trainable_params:,}")
+print(f"💡 Trainable ratio: {100 * trainable_params / total_params:.4f}%")
+
 TOKENIZER = MBart50Tokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
 TOKENIZER.src_lang = "en_XX"
 TOKENIZER.tgt_lang = "hi_IN"  # Setting Hindi token id as a proxy for Sanskrit
@@ -263,17 +279,18 @@ training_args = Seq2SeqTrainingArguments(
     output_dir="./results",
     eval_strategy="steps",
     eval_steps=500,
-    per_device_train_batch_size=1,
-    per_device_eval_batch_size=1,
-    learning_rate=3e-5,
-    num_train_epochs=3,
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=16,
+    gradient_accumulation_steps=2,
+    learning_rate=5e-5,
+    num_train_epochs=1,
     fp16=True,
     weight_decay=0.01,
     save_total_limit=2,
     save_steps=500,
     logging_dir="./logs",
     logging_steps=100,
-    optim="paged_adamw_8bit",
+    optim="adamw_torch_fused",
     predict_with_generate=True,  # important for seq2seq tasks
 )
 print("Training arguments set successfully ✅")
