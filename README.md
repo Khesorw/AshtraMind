@@ -20,5 +20,5 @@
 - MBart model
 - MT5-Small model
 ### Comparison with State-of-the-Art Results IndicTrans2
--
--
+- The MBART model outperforms IndicTrans2 by 5 BLEU points.
+- The MT5-Small model is competitive with IndicTrans2, achieving similar ROUGE and CHRF++ scores.
