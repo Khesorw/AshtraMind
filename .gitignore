@@ -208,3 +208,8 @@ __marimo__/
 
 
 practice.py
+# Mbart Model checkpoint files etc
+results/
+
+# Checkpoint file for mt5 
+rng_state.pth
