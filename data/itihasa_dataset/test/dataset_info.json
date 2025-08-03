@@ -1,0 +1,61 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "Itihasa",
+  "dataset_name": "itihasa",
+  "dataset_size": 42772778,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/rahular/itihasa@3ffc8fc96d399d8043a5591dcb833c7213d03013/Itihasa/train/0000.parquet": {
+      "num_bytes": 16377953,
+      "checksum": null
+    },
+    "hf://datasets/rahular/itihasa@3ffc8fc96d399d8043a5591dcb833c7213d03013/Itihasa/validation/0000.parquet": {
+      "num_bytes": 1393908,
+      "checksum": null
+    },
+    "hf://datasets/rahular/itihasa@3ffc8fc96d399d8043a5591dcb833c7213d03013/Itihasa/test/0000.parquet": {
+      "num_bytes": 2614908,
+      "checksum": null
+    }
+  },
+  "download_size": 20386769,
+  "features": {
+    "translation": {
+      "languages": [
+        "sn",
+        "en"
+      ],
+      "_type": "Translation"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 63159547,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 34530156,
+      "num_examples": 75162,
+      "dataset_name": "itihasa"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 2883586,
+      "num_examples": 6149,
+      "dataset_name": "itihasa"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 5359036,
+      "num_examples": 11722,
+      "dataset_name": "itihasa"
+    }
+  },
+  "version": {
+    "version_str": "1.0.0",
+    "major": 1,
+    "minor": 0,
+    "patch": 0
+  }
+}
